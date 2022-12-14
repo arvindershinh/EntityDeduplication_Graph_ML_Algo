@@ -39,7 +39,7 @@ object PanMergingGraphX extends App  {
           if (id == ID) (vd, clsID) else (vd, 0))
 
         val pregelGraph: Graph[(String, Int), String] = initialGraph.pregel(0, Int.MaxValue, EdgeDirection.Either)(
-          (id, attr, msgClsID) => if (msgClsID == 0) attr else (attr._1, msgClsID), // Vertex Program
+          (id, attr, msgClsID) => if (msgClsID == 0) attr else (attr._1, msgClsID), // Update Vertex based on Message received
           triplet => { // Send Message
             if (triplet.srcAttr._2 != 0 & triplet.dstAttr._2 == 0) {
               Iterator((triplet.dstId, triplet.srcAttr._2))
@@ -50,7 +50,7 @@ object PanMergingGraphX extends App  {
               Iterator.empty
             }
           },
-          (a, b) => if (a == 0) b else a
+          (a, b) => if (a == 0) b else a // Resolve multiple messages received at Vertex
         )
         val residueGraph = pregelGraph.subgraph(vpred = (id, attr) => attr._2 == 0).mapVertices((id, vd) => vd._1)
 

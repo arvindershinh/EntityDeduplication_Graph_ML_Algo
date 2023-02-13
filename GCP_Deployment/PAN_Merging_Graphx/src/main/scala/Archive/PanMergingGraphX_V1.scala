@@ -1,29 +1,27 @@
-package ArvinderShinh
+package Archive
 
 import org.apache.spark.graphx.{Edge, EdgeDirection, Graph, VertexId}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SparkSession}
-import scala.util.hashing.MurmurHash3
+import org.apache.spark.{SparkConf, SparkContext}
 
-object PanMergingGraphX extends App  {
+object PanMergingGraphX_V1 extends App  {
 
-  val spark = SparkSession.builder
-    .appName("PAN Merging")
-    .master("local[1]")
-    .getOrCreate
+  val conf = new SparkConf().setAppName("PAN Merging").setMaster("local")
+  val sc = new SparkContext(conf)
 
-  import spark.implicits._
+  val nodes: RDD[(VertexId, String)] =
+    sc.parallelize(Seq(
+      (1L, "N1"), (2L, "N2"), (3L, "N3"), (4L, "N4"), (5L, "N5"), (6L, "N6"), (7L, "N7"), (8L, "N8")
+      )
+    )
 
-  val file = spark.sparkContext.textFile("D:/Workspace/Spark/PAN_Merging/PAN_Merging_Graphx/src/main/resources/PAN_Groups_Sample.csv");
-
-  val nodes: RDD[(VertexId, String)] = file.flatMap(line => line.split(",")).distinct().map(s => (MurmurHash3.stringHash(s), s))
-
-  val edges: RDD[Edge[String]] = file.map(line => line.split(","))
-    .map(line => Edge(MurmurHash3.stringHash(line(0)), MurmurHash3.stringHash(line(1)), "PAN has GroupID"))
+  val edges: RDD[Edge[String]] =
+    sc.parallelize(Seq
+    (Edge(1L, 2L, "1->2"),Edge(2L, 3L, "2->3"),Edge(1L, 3L, "1->3"),Edge(2L, 4L, "2->4"),
+      Edge(6L, 5L, "6->5"),Edge(7L, 5L, "7->5"),Edge(8L, 5L, "8->5"))
+    )
 
   val graph: Graph[String, String] = Graph(nodes, edges)
-
-//  graph.triplets.foreach(e => println(e.srcAttr+" "+e.srcId+" "+e.attr+" "+e.dstId+" "+e.dstAttr))
 
   def Merging(graph: Graph[String, String]): List[RDD[(VertexId, (String, Int))]] = {
 
@@ -39,7 +37,7 @@ object PanMergingGraphX extends App  {
           if (id == ID) (vd, clsID) else (vd, 0))
 
         val pregelGraph: Graph[(String, Int), String] = initialGraph.pregel(0, Int.MaxValue, EdgeDirection.Either)(
-          (id, attr, msgClsID) => if (msgClsID == 0) attr else (attr._1, msgClsID), // Update Vertex based on Message received
+          (id, attr, msgClsID) => if (msgClsID == 0) attr else (attr._1, msgClsID), // Vertex Program
           triplet => { // Send Message
             if (triplet.srcAttr._2 != 0 & triplet.dstAttr._2 == 0) {
               Iterator((triplet.dstId, triplet.srcAttr._2))
@@ -50,7 +48,7 @@ object PanMergingGraphX extends App  {
               Iterator.empty
             }
           },
-          (a, b) => if (a == 0) b else a // Resolve multiple messages received at Vertex
+          (a, b) => if (a == 0) b else a
         )
         val residueGraph = pregelGraph.subgraph(vpred = (id, attr) => attr._2 == 0).mapVertices((id, vd) => vd._1)
 
@@ -63,8 +61,6 @@ object PanMergingGraphX extends App  {
 
   val clusters = Merging(graph)
 
-  val cls_DF = clusters.flatMap(vertexCluster => vertexCluster.collect).map(v => (v._1.toString, v._2._1, v._2._2))
-                  .toDF("NodeID", "Node", "ClusterID")
+  clusters.foreach(vertexCluster => vertexCluster.foreach(v => println(v._1+"-->"+v._2._1+"->"+v._2._2)))
 
-  cls_DF.coalesce(1).write.csv("D:/Workspace/Spark/PAN_Merging/PAN_Merging_Graphx/src/main/resources/PAN_Merging1.csv")
 }

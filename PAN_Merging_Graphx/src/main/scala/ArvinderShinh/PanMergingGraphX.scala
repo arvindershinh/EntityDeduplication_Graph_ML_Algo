@@ -38,6 +38,7 @@ object PanMergingGraphX extends App  {
         val initialGraph = graph.mapVertices((id, vd) =>
           if (id == ID) (vd, clsID) else (vd, 0))
 
+	// instead of Int.MaxValue, it can be n-1, where n are total number of vertices. n-1 is the maximum length of path between two nodes.
         val pregelGraph: Graph[(String, Int), String] = initialGraph.pregel(0, Int.MaxValue, EdgeDirection.Either)(
           (id, attr, msgClsID) => if (msgClsID == 0) attr else (attr._1, msgClsID), // Update Vertex based on Message received
           triplet => { // Send Message
